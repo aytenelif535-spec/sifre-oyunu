@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Şifre Çözücüler: Sezar ve Vigenère</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f1e9d6;
+    --panel: #f9f4e6;
+    --ink: #231f16;
+    --muted: #66604f;
+    --line: #cdbf9c;
+    --brass: #8a6410;
+    --brass-ink: #ffffff;
+    --good: #2f6f31;
+    --bad: #a3321f;
+    --serif: "Fraunces", Georgia, "Times New Roman", serif;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17150f;
+      --panel: #211e15;
+      --ink: #efe6cf;
+      --muted: #aaa085;
+      --line: #3d3724;
+      --brass: #d9b04a;
+      --brass-ink: #17150f;
+      --good: #86d08a;
+      --bad: #ff9a85;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.6; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 48px 20px 64px; }
+  h1 { font-family: var(--serif); font-size: clamp(2.1rem, 6vw, 3.4rem); line-height: 1.05; margin: 0 0 12px; font-weight: 700; }
+  h1 span { color: var(--brass); }
+  .lead { color: var(--muted); max-width: 58ch; margin: 0; }
+
+  nav { display: flex; gap: 6px; margin-top: 32px; }
+  nav button {
+    font: 500 1rem var(--sans); color: var(--muted); background: none; cursor: pointer;
+    border: 1px solid var(--line); border-bottom: 0; padding: 10px 20px; border-radius: 6px 6px 0 0;
+  }
+  nav button[aria-selected="true"] { color: var(--ink); background: var(--panel); font-weight: 600; }
+  section.tab { display: none; background: var(--panel); border: 1px solid var(--line); padding: 28px; }
+  section.tab.active { display: block; }
+
+  h2 { font-family: var(--serif); font-size: 1.4rem; margin: 0 0 6px; }
+  .desc { color: var(--muted); margin: 0 0 18px; max-width: 62ch; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+  label { display: block; font-weight: 500; font-size: .92rem; margin: 0 0 6px; }
+  input, select, textarea {
+    width: 100%; font: 1rem var(--mono); color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); padding: 9px 11px; border-radius: 4px;
+  }
+  textarea { min-height: 96px; resize: vertical; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 3px solid var(--brass); outline-offset: 2px;
+  }
+  .field { margin-top: 16px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .btn {
+    font: 500 .95rem var(--sans); cursor: pointer; border-radius: 4px; padding: 9px 18px;
+    color: var(--brass-ink); background: var(--brass); border: 1px solid var(--brass);
+  }
+  .btn.ghost { background: none; color: var(--ink); border-color: var(--line); }
+  .btn[hidden] { display: none; }
+
+  .out {
+    font-family: var(--mono); font-size: 1.05rem; background: var(--bg); border: 1px dashed var(--line);
+    padding: 14px; border-radius: 4px; min-height: 52px; word-break: break-word; white-space: pre-wrap;
+  }
+  .small { font-size: .85rem; color: var(--muted); margin-top: 8px; font-family: var(--mono); word-break: break-all; }
+
+  .wheel { overflow-x: auto; margin-top: 18px; padding-bottom: 6px; }
+  .wheel .rowline { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .wheel .tag { min-width: 90px; font-size: .78rem; color: var(--muted); }
+  .wheel .cells { display: flex; }
+  .wheel .cells span {
+    width: 26px; text-align: center; font: 500 .85rem var(--mono);
+    border: 1px solid var(--line); margin-left: -1px; padding: 2px 0;
+  }
+  .wheel .cells.shifted span { color: var(--brass); font-weight: 500; }
+
+  .brute { margin-top: 18px; max-height: 280px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); }
+  .brute div { display: flex; gap: 12px; padding: 5px 12px; font: .88rem var(--mono); border-bottom: 1px solid var(--line); }
+  .brute div b { min-width: 24px; color: var(--brass); }
+  .brute div:last-child { border-bottom: 0; }
+
+  .level { font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; color: var(--brass); font-weight: 500; }
+  .cipher { font: 500 clamp(1.1rem, 3vw, 1.5rem)/1.5 var(--mono); background: var(--bg); border: 1px solid var(--line); padding: 18px; border-radius: 4px; margin: 14px 0; word-break: break-word; }
+  .meta { color: var(--muted); font-size: .95rem; }
+  .meta strong { color: var(--ink); font-family: var(--mono); }
+  .feedback { min-height: 1.6em; margin-top: 12px; font-weight: 500; }
+  .feedback.good { color: var(--good); }
+  .feedback.bad { color: var(--bad); }
+  .hint { margin-top: 12px; color: var(--muted); font-style: italic; }
+  footer { margin-top: 28px; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Şifre <span>Çözücüler</span></h1>
+    <p class="lead">Sezar ve Vigenère şifrelerini dene, sonra dört seviyelik oyunda gizli mesajları çöz. Tüm işlemler tarayıcında yapılır.</p>
+  </header>
+
+  <nav role="tablist" aria-label="Bölümler">
+    <button role="tab" aria-selected="true" data-tab="tool">Araç</button>
+    <button role="tab" aria-selected="false" data-tab="game">Oyun</button>
+  </nav>
+
+  <!-- ARAÇ -->
+  <section class="tab active" id="tool" role="tabpanel">
+    <h2>Şifreleme aracı</h2>
+    <p class="desc">Bir yöntem seç, anahtarı gir ve metni şifrele ya da çöz. Türkçe harfler İngilizce karşılığına çevrilir (ç → c, ş → s). Harf olmayan karakterler olduğu gibi kalır.</p>
+
+    <div class="grid">
+      <div>
+        <label for="mode">Yöntem</label>
+        <select id="mode">
+          <option value="caesar">Sezar (kaydırma)</option>
+          <option value="vigenere">Vigenère (anahtar kelime)</option>
+        </select>
+      </div>
+      <div>
+        <label for="dir">İşlem</label>
+        <select id="dir">
+          <option value="enc">Şifrele</option>
+          <option value="dec">Çöz</option>
+        </select>
+      </div>
+      <div>
+        <label for="key" id="keyLabel">Kaydırma (1-25)</label>
+        <input id="key" type="number" min="1" max="25" value="3" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="inp">Metin</label>
+      <textarea id="inp" spellcheck="false" placeholder="Buraya bir mesaj yaz..."></textarea>
+    </div>
+
+    <div class="field">
+      <label>Sonuç</label>
+      <div class="out" id="out" aria-live="polite"></div>
+      <div class="small" id="stream"></div>
+    </div>
+
+    <div class="row">
+      <button class="btn ghost" id="copy" type="button">Kopyala</button>
+      <button class="btn" id="brute" type="button" hidden>Tüm kaydırmaları dene</button>
+    </div>
+
+    <div class="wheel" id="wheel"></div>
+    <div class="brute" id="bruteList" hidden></div>
+  </section>
+
+  <!-- OYUN -->
+  <section class="tab" id="game" role="tabpanel">
+    <div class="level" id="lvl"></div>
+    <h2 id="lvlTitle"></h2>
+    <p class="desc" id="lvlDesc"></p>
+
+    <div class="cipher" id="cipherText" aria-label="Şifreli mesaj"></div>
+    <div class="meta" id="lvlMeta"></div>
+
+    <div class="field">
+      <label for="answer">Çözdüğün mesaj</label>
+      <input id="answer" type="text" autocomplete="off" spellcheck="false" placeholder="Mesajı buraya yaz">
+    </div>
+    <div class="row">
+      <button class="btn" id="check" type="button">Kontrol et</button>
+      <button class="btn ghost" id="hintBtn" type="button">İpucu</button>
+      <button class="btn ghost" id="toTool" type="button">Araca gönder</button>
+      <button class="btn" id="next" type="button" hidden>Sonraki seviye</button>
+    </div>
+    <div class="hint" id="hint" hidden></div>
+    <div class="feedback" id="feedback" aria-live="polite"></div>
+  </section>
+
+  <footer>Eğitim amaçlıdır. Sezar ve Vigenère tarihî şifrelerdir ve bugün gerçek güvenlik için kullanılmaz.</footer>
+</div>
+
+<script>
+(function () {
+  // ---------- Yardımcılar ----------
+  const TR = { 'ç':'c','Ç':'C','ğ':'g','Ğ':'G','ı':'i','İ':'I','ö':'o','Ö':'O','ş':'s','Ş':'S','ü':'u','Ü':'U' };
+  const norm = s => s.replace(/[çÇğĞıİöÖşŞüÜ]/g, c => TR[c]);
+  const lettersOnly = s => norm(s).toUpperCase().replace(/[^A-Z]/g, '');
+
+  function shiftChar(ch, k) {
+    const code = ch.charCodeAt(0);
+    let base;
+    if (code >= 65 && code <= 90) base = 65;
+    else if (code >= 97 && code <= 122) base = 97;
+    else return ch;
+    return String.fromCharCode(((code - base + k) % 26 + 26) % 26 + base);
+  }
+
+  function caesar(text, k, decrypt) {
+    const s = decrypt ? -k : k;
+    return Array.from(norm(text)).map(c => shiftChar(c, s)).join('');
+  }
+
+  function vigenere(text, key, decrypt) {
+    const shifts = Array.from(lettersOnly(key)).map(c => c.charCodeAt(0) - 65);
+    if (!shifts.length) return norm(text);
+    let i = 0;
+    return Array.from(norm(text)).map(c => {
+      if (!/[A-Za-z]/.test(c)) return c;
+      const s = shifts[i++ % shifts.length];
+      return shiftChar(c, decrypt ? -s : s);
+    }).join('');
+  }
+
+  function keystream(text, key) {
+    const k = lettersOnly(key);
+    if (!k) return '';
+    let i = 0;
+    return Array.from(norm(text)).map(c => /[A-Za-z]/.test(c) ? k[i++ % k.length] : c).join('');
+  }
+
+  // ---------- Sekmeler ----------
+  const tabs = document.querySelectorAll('nav button');
+  function showTab(name) {
+    tabs.forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
+    document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === name));
+  }
+  tabs.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+  // ---------- Araç ----------
+  const $ = id => document.getElementById(id);
+  const mode = $('mode'), dir = $('dir'), key = $('key'), inp = $('inp'), out = $('out');
+
+  function setMode() {
+    if (mode.value === 'caesar') {
+      key.type = 'number'; key.min = 1; key.max = 25;
+      if (!/^\d+$/.test(key.value)) key.value = 3;
+      $('keyLabel').textContent = 'Kaydırma (1-25)';
+    } else {
+      key.type = 'text';
+      if (/^\d*$/.test(key.value)) key.value = 'KEDI';
+      $('keyLabel').textContent = 'Anahtar kelime (harflerden oluşsun)';
+    }
+    update();
+  }
+
+  function renderWheel(k) {
+    const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const top = Array.from(A).map(c => `<span>${c}</span>`).join('');
+    const bot = Array.from(A).map((c, i) => `<span>${A[(i + k) % 26]}</span>`).join('');
+    $('wheel').innerHTML =
+      `<div class="rowline"><div class="tag">Düz harf</div><div class="cells">${top}</div></div>` +
+      `<div class="rowline"><div class="tag">Şifreli harf</div><div class="cells shifted">${bot}</div></div>`;
+  }
+
+  function update() {
+    const dec = dir.value === 'dec';
+    $('bruteList').hidden = true;
+    $('brute').hidden = !(mode.value === 'caesar' && dec);
+
+    if (mode.value === 'caesar') {
+      let k = parseInt(key.value, 10);
+      if (isNaN(k)) k = 0;
+      k = ((k % 26) + 26) % 26;
+      out.textContent = caesar(inp.value, k, dec);
+      $('stream').textContent = '';
+      renderWheel(k);
+    } else {
+      out.textContent = vigenere(inp.value, key.value, dec);
+      $('stream').textContent = inp.value && lettersOnly(key.value)
+        ? 'Anahtar akışı: ' + keystream(inp.value, key.value) : '';
+      $('wheel').innerHTML = '';
+    }
+  }
+  [mode].forEach(el => el.addEventListener('change', setMode));
+  dir.addEventListener('change', update);
+  key.addEventListener('input', update);
+  inp.addEventListener('input', update);
+
+  $('copy').addEventListener('click', e => {
+    if (!out.textContent) return;
+    navigator.clipboard.writeText(out.textContent).then(() => {
+      e.target.textContent = 'Kopyalandı';
+      setTimeout(() => (e.target.textContent = 'Kopyala'), 1500);
+    }).catch(() => {});
+  });
+
+  $('brute').addEventListener('click', () => {
+    if (!inp.value.trim()) return;
+    const list = $('bruteList');
+    let html = '';
+    for (let k = 1; k <= 25; k++) html += `<div><b>${k}</b><span>${caesar(inp.value, k, true).replace(/</g, '&lt;')}</span></div>`;
+    list.innerHTML = html;
+    list.hidden = false;
+  });
+
+  // ---------- Oyun ----------
+  const levels = [
+    { type: 'caesar', key: 3, showKey: true, plain: 'SIFRELEME ILE TANISTIN',
+      title: 'Seviye 1: İlk kaydırma',
+      desc: 'Julius Caesar mesajlarını harfleri üç adım kaydırarak şifrelermiş. Anahtar sana verildi, mesajı çöz.',
+      hint: 'Çözmek için her harfi 3 geri götür. D harfi A olur, E harfi B olur.' },
+    { type: 'caesar', key: 7, showKey: false, plain: 'ANAHTARI BULMAK ICIN TUM KAYDIRMALARI DENE',
+      title: 'Seviye 2: Kayıp anahtar',
+      desc: 'Bu sefer kaydırma miktarı verilmedi. Sadece 25 olasılık var, hepsini denemek yeterli.',
+      hint: 'Araç sekmesinde Sezar ve Çöz seçiliyken "Tüm kaydırmaları dene" butonuna bas. Anlamlı cümleyi bul.' },
+    { type: 'vigenere', key: 'KEDI', showKey: true, plain: 'PAROLANI KIMSEYLE PAYLASMA',
+      title: 'Seviye 3: Anahtar kelime',
+      desc: 'Vigenère şifresi her harf için farklı bir kaydırma kullanır. Anahtar kelime KEDI, bu da sırayla 10, 4, 3, 8 kaydırma demek.',
+      hint: 'K = 10, E = 4, D = 3, I = 8. Araçta Vigenère, Çöz ve anahtar olarak KEDI seç.' },
+    { type: 'vigenere', key: 'KURT', showKey: false, plain: 'HICBIR SEYE GUVENME HER SEYI DOGRULA',
+      title: 'Seviye 4: Gizli kelime',
+      desc: 'Son seviye. Anahtar kelimeyi sen tahmin edeceksin. Siber güvenlikte bu cümle bir ilkenin özetidir.',
+      hint: 'Anahtar 4 harfli ve ormanda yaşayan, sürü halinde avlanan bir hayvan.' }
+  ];
+  let cur = 0;
+  const cipherOf = L => L.type === 'caesar' ? caesar(L.plain, L.key, false) : vigenere(L.plain, L.key, false);
+
+  function setFeedback(msg, cls) {
+    const f = $('feedback');
+    f.textContent = msg; f.className = 'feedback ' + (cls || '');
+  }
+
+  function renderLevel() {
+    const L = levels[cur];
+    $('lvl').textContent = `Seviye ${cur + 1} / ${levels.length}`;
+    $('lvlTitle').textContent = L.title;
+    $('lvlDesc').textContent = L.desc;
+    $('cipherText').textContent = cipherOf(L);
+    const method = L.type === 'caesar' ? 'Sezar' : 'Vigenère';
+    $('lvlMeta').innerHTML = `Yöntem: <strong>${method}</strong> · Anahtar: <strong>${L.showKey ? L.key : '?'}</strong>`;
+    $('answer').value = ''; $('answer').disabled = false;
+    $('hint').hidden = true; $('hint').textContent = L.hint;
+    $('next').hidden = true; $('check').hidden = false; $('hintBtn').hidden = false; $('toTool').hidden = false;
+    setFeedback('', '');
+  }
+
+  $('check').addEventListener('click', () => {
+    const L = levels[cur];
+    if (lettersOnly($('answer').value) === lettersOnly(L.plain)) {
+      $('answer').disabled = true;
+      $('check').hidden = true; $('hintBtn').hidden = true; $('toTool').hidden = true;
+      if (cur === levels.length - 1) {
+        setFeedback('Tebrikler, tüm seviyeleri çözdün! Gerçek şifreleme yöntemleri bundan çok daha güçlü, ama mantığı artık biliyorsun.', 'good');
+      } else {
+        setFeedback('Doğru! Mesaj: ' + L.plain, 'good');
+        $('next').hidden = false;
+      }
+    } else {
+      setFeedback('Henüz değil, tekrar dene. İpucu butonu yardımcı olabilir.', 'bad');
+    }
+  });
+  $('answer').addEventListener('keydown', e => { if (e.key === 'Enter') $('check').click(); });
+  $('hintBtn').addEventListener('click', () => { $('hint').hidden = false; });
+  $('next').addEventListener('click', () => { cur++; renderLevel(); });
+
+  $('toTool').addEventListener('click', () => {
+    const L = levels[cur];
+    mode.value = L.type;
+    setMode();
+    dir.value = 'dec';
+    key.value = L.showKey ? L.key : (L.type === 'caesar' ? 1 : '');
+    inp.value = cipherOf(L);
+    update();
+    showTab('tool');
+  });
+
+  // Başlangıç
+  update();
+  renderLevel();
+})();
+</script>
+</body>
+</html>
